@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VidVault 2 — Local Media Library</title>
+<style>
+  :root {
+    --bg: #0e0f12;
+    --panel: #16181d;
+    --panel-2: #1d2027;
+    --line: #262a33;
+    --text: #e6e8ee;
+    --muted: #8a91a0;
+    --accent: #4f8cff;
+    --danger: #e5484d;
+    --photo-accent: #22c55e;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  header h1 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: 0.2px; }
+  header .meta { color: var(--muted); font-size: 12px; }
+  main { padding: 20px; max-width: 1200px; margin: 0 auto; }
+
+  .dropzone {
+    border: 2px dashed var(--line);
+    border-radius: 10px;
+    padding: 26px;
+    text-align: center;
+    color: var(--muted);
+    background: var(--panel);
+    transition: border-color .15s, background .15s;
+    cursor: pointer;
+  }
+  .dropzone.drag { border-color: var(--accent); background: var(--panel-2); color: var(--text); }
+  .dropzone strong { color: var(--text); }
+  .dropzone .btn-row { margin-top: 12px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+
+  button {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 14px;
+    font: inherit;
+    cursor: pointer;
+    transition: background .12s, border-color .12s;
+  }
+  button:hover { background: #232733; border-color: #333a47; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { background: #3d7bf0; }
+  button.danger { color: var(--danger); border-color: #3a2022; }
+  button.danger:hover { background: #2a1a1c; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin: 20px 0 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .tab {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 10px 16px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .tab:hover { background: var(--panel); color: var(--text); border-color: var(--line); }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+  .toolbar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin: 0 0 14px;
+    flex-wrap: wrap;
+  }
+  .toolbar input[type="search"] {
+    flex: 1;
+    min-width: 200px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font: inherit;
+  }
+  .toolbar input[type="search"]:focus { outline: none; border-color: var(--accent); }
+  .toolbar select {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: 6px;
+    font: inherit;
+  }
+
+  .progress-list { margin: 12px 0; display: flex; flex-direction: column; gap: 6px; }
+  .progress-item {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .progress-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .progress-item .bar { width: 160px; height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+  .progress-item .bar > i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .15s; }
+  .progress-item.photo .bar > i { background: var(--photo-accent); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: border-color .15s;
+  }
+  .card:hover { border-color: #333a47; }
+  .card .thumb {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .card .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .card .thumb video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+  }
+  .card .info { padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .card .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .sub { color: var(--muted); font-size: 12px; }
+  .card .actions { padding: 0 12px 12px; display: flex; gap: 8px; }
+  .card .actions button { flex: 1; padding: 6px 10px; font-size: 13px; }
+
+  .badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: rgba(0,0,0,.65);
+    color: #fff;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.3px;
+  }
+  .thumb-wrap { position: relative; }
+
+  .empty {
+    text-align: center;
+    color: var(--muted);
+    padding: 40px 20px;
+    border: 1px dashed var(--line);
+    border-radius: 10px;
+  }
+
+  .status { color: var(--muted); font-size: 12px; margin-top: 8px; min-height: 1.2em; }
+  .status.err { color: var(--danger); }
+
+  /* Lightbox */
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.92);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .lightbox.open { display: flex; }
+  .lightbox img {
+    max-width: 95vw;
+    max-height: 92vh;
+    object-fit: contain;
+    display: block;
+    border-radius: 4px;
+  }
+  .lightbox video {
+    max-width: 95vw;
+    max-height: 92vh;
+    background: #000;
+    border-radius: 4px;
+  }
+  .lightbox .close {
+    position: absolute;
+    top: 16px;
+    right: 20px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--text);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .lightbox .close:hover { background: var(--panel-2); }
+  .lightbox .caption {
+    position: absolute;
+    bottom: 16px;
+    left: 20px;
+    right: 20px;
+    text-align: center;
+    color: #ddd;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>VidVault 2</h1>
+  <span class="meta" id="headerMeta">0 items</span>
+</header>
+
+<main>
+  <div class="dropzone" id="dropzone">
+    <div><strong>Drop videos and photos here</strong> or pick files. Everything stays on this device — stored in IndexedDB.</div>
+    <div class="btn-row">
+      <button class="primary" id="pickVideoBtn" type="button">Add videos</button>
+      <button class="primary" id="pickPhotoBtn" type="button" style="background:var(--photo-accent);border-color:var(--photo-accent)">Add photos</button>
+      <button id="clearAllBtn" type="button" class="danger">Clear library</button>
+    </div>
+    <input type="file" id="videoInput" accept="video/*" multiple hidden>
+    <input type="file" id="photoInput" accept="image/*" multiple hidden>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="progress-list" id="progressList"></div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab active" data-filter="all" type="button">All</button>
+    <button class="tab" data-filter="video" type="button">Videos</button>
+    <button class="tab" data-filter="photo" type="button">Photos</button>
+  </div>
+
+  <div class="toolbar">
+    <input type="search" id="searchInput" placeholder="Search by name…">
+    <select id="sortSelect">
+      <option value="newest">Newest first</option>
+      <option value="oldest">Oldest first</option>
+      <option value="name">Name (A→Z)</option>
+      <option value="size">Largest first</option>
+    </select>
+    <span class="meta" id="countLabel">0 items</span>
+  </div>
+
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="emptyState">No media stored yet.</div>
+</main>
+
+<div class="lightbox" id="lightbox" aria-hidden="true">
+  <button class="close" id="lightboxClose" type="button" aria-label="Close">×</button>
+  <div id="lightboxContent"></div>
+  <div class="caption" id="lightboxCaption"></div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const DB_NAME = 'vidvault2';
+  const DB_VERSION = 1;
+  const STORE_VIDEO = 'videos';
+  const STORE_PHOTO = 'photos';
+
+  const els = {
+    dropzone: document.getElementById('dropzone'),
+    pickVideoBtn: document.getElementById('pickVideoBtn'),
+    pickPhotoBtn: document.getElementById('pickPhotoBtn'),
+    clearAllBtn: document.getElementById('clearAllBtn'),
+    videoInput: document.getElementById('videoInput'),
+    photoInput: document.getElementById('photoInput'),
+    status: document.getElementById('status'),
+    progressList: document.getElementById('progressList'),
+    searchInput: document.getElementById('searchInput'),
+    sortSelect: document.getElementById('sortSelect'),
+    countLabel: document.getElementById('countLabel'),
+    grid: document.getElementById('grid'),
+    emptyState: document.getElementById('emptyState'),
+    headerMeta: document.getElementById('headerMeta'),
+    tabs: Array.from(document.querySelectorAll('.tab')),
+    lightbox: document.getElementById('lightbox'),
+    lightboxContent: document.getElementById('lightboxContent'),
+    lightboxCaption: document.getElementById('lightboxCaption'),
+    lightboxClose: document.getElementById('lightboxClose'),
+  };
+
+  let db = null;
+  const objectUrls = new Set();
+  let allItems = [];
+  let activeFilter = 'all';
+  let activeSort = 'newest';
+
+  const VIDEO_EXT = /\.(mp4|webm|ogg|ogv|mov|mkv|m4v|avi|3gp)$/i;
+  const PHOTO_EXT = /\.(jpg|jpeg|png|gif|webp|avif|bmp|svg|heic|heif)$/i;
+
+  // ---------- DB ----------
+
+  function openDb() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = () => {
+        const d = req.result;
+        if (!d.objectStoreNames.contains(STORE_VIDEO)) {
+          const s = d.createObjectStore(STORE_VIDEO, { keyPath: 'id', autoIncrement: true });
+          s.createIndex('createdAt', 'createdAt');
+          s.createIndex('name', 'name');
+        }
+        if (!d.objectStoreNames.contains(STORE_PHOTO)) {
+          const s = d.createObjectStore(STORE_PHOTO, { keyPath: 'id', autoIncrement: true });
+          s.createIndex('createdAt', 'createdAt');
+          s.createIndex('name', 'name');
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+      req.onblocked = () => reject(new Error('IndexedDB upgrade blocked by another tab.'));
+    });
+  }
+
+  function tx(storeName, mode) {
+    const t = db.transaction(storeName, mode);
+    return t.objectStore(storeName);
+  }
+
+  function addRecord(storeName, record) {
+    return new Promise((resolve, reject) => {
+      const req = tx(storeName, 'readwrite').add(record);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function deleteRecord(storeName, id) {
+    return new Promise((resolve, reject) => {
+      const req = tx(storeName, 'readwrite').delete(id);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function clearStore(storeName) {
+    return new Promise((resolve, reject) => {
+      const req = tx(storeName, 'readwrite').clear();
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function getAllFrom(storeName) {
+    return new Promise((resolve, reject) => {
+      const req = tx(storeName, 'readonly').getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  // ---------- Helpers ----------
+
+  function fmtBytes(n) {
+    if (!n) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let i = 0, v = n;
+    while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+    return v.toFixed(v >= 10 || i === 0 ? 0 : 1) + ' ' + units[i];
+  }
+
+  function fmtDate(ts) {
+    return new Date(ts).toLocaleString();
+  }
+
+  function setStatus(msg, isErr = false) {
+    els.status.textContent = msg;
+    els.status.classList.toggle('err', isErr);
+  }
+
+  function revokeAll() {
+    for (const url of objectUrls) URL.revokeObjectURL(url);
+    objectUrls.clear();
+  }
+
+  function classify(file) {
+    const t = file.type || '';
+    if (t.startsWith('video/')) return 'video';
+    if (t.startsWith('image/')) return 'photo';
+    if (VIDEO_EXT.test(file.name)) return 'video';
+    if (PHOTO_EXT.test(file.name)) return 'photo';
+    return null;
+  }
+
+  // ---------- Ingest ----------
+
+  async function ingestFiles(fileList) {
+    const files = Array.from(fileList);
+    const buckets = { video: [], photo: [], skipped: [] };
+    for (const f of files) {
+      const kind = classify(f);
+      if (kind === 'video') buckets.video.push(f);
+      else if (kind === 'photo') buckets.photo.push(f);
+      else buckets.skipped.push(f.name);
+    }
+    if (!buckets.video.length && !buckets.photo.length) {
+      setStatus('No video or photo files recognized in that selection.', true);
+      return;
+    }
+
+    let ok = 0, fail = 0;
+
+    for (const f of buckets.video) {
+      const item = createProgressItem(f.name, 'video');
+      try {
+        const blob = await readWithProgress(f, item.bar);
+        await addRecord(STORE_VIDEO, {
+          name: f.name, type: f.type || 'video/mp4',
+          size: f.size, blob, createdAt: Date.now(),
+        });
+        ok++;
+        item.el.remove();
+      } catch (err) {
+        fail++;
+        markProgressFailed(item, f.name, err);
+      }
+    }
+    for (const f of buckets.photo) {
+      const item = createProgressItem(f.name, 'photo');
+      try {
+        const blob = await readWithProgress(f, item.bar);
+        await addRecord(STORE_PHOTO, {
+          name: f.name, type: f.type || 'image/jpeg',
+          size: f.size, blob, createdAt: Date.now(),
+        });
+        ok++;
+        item.el.remove();
+      } catch (err) {
+        fail++;
+        markProgressFailed(item, f.name, err);
+      }
+    }
+
+    const skippedNote = buckets.skipped.length
+      ? ` · skipped ${buckets.skipped.length} unrecognized`
+      : '';
+    setStatus(
+      `Imported ${ok} item${ok === 1 ? '' : 's'}${fail ? `, ${fail} failed` : ''}${skippedNote}.`,
+      fail > 0 && ok === 0
+    );
+    await refresh();
+  }
+
+  function createProgressItem(name, kind) {
+    const el = document.createElement('div');
+    el.className = 'progress-item' + (kind === 'photo' ? ' photo' : '');
+    el.innerHTML = `<span class="name"></span><div class="bar"><i></i></div><span class="sub"></span>`;
+    el.querySelector('.name').textContent = name;
+    const bar = el.querySelector('.bar > i');
+    const pct = el.querySelector('.sub');
+    els.progressList.appendChild(el);
+    return {
+      el,
+      bar: {
+        set: (p) => {
+          bar.style.width = Math.round(p * 100) + '%';
+          pct.textContent = Math.round(p * 100) + '%';
+        },
+      },
+    };
+  }
+
+  function markProgressFailed(item, name, err) {
+    item.el.querySelector('.bar').replaceChildren();
+    item.el.querySelector('.name').textContent =
+      name + ' — failed: ' + (err && err.message ? err.message : String(err));
+    item.el.style.borderColor = 'var(--danger)';
+    item.el.querySelector('.sub').textContent = '';
+  }
+
+  function readWithProgress(file, bar) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onprogress = (e) => {
+        if (e.lengthComputable) bar.set(e.loaded / e.total);
+      };
+      reader.onload = () => {
+        bar.set(1);
+        const blob = new Blob([reader.result], { type: file.type || 'application/octet-stream' });
+        resolve(blob);
+      };
+      reader.onerror = () => reject(reader.error || new Error('Read failed'));
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  // ---------- Render ----------
+
+  async function refresh() {
+    try {
+      const [vids, pics] = await Promise.all([
+        getAllFrom(STORE_VIDEO),
+        getAllFrom(STORE_PHOTO),
+      ]);
+      allItems = [
+        ...vids.map(v => ({ ...v, kind: 'video', store: STORE_VIDEO })),
+        ...pics.map(p => ({ ...p, kind: 'photo', store: STORE_PHOTO })),
+      ];
+    } catch (err) {
+      setStatus('Could not load library: ' + err.message, true);
+      return;
+    }
+    renderList();
+  }
+
+  function sortItems(items) {
+    const s = activeSort;
+    const copy = items.slice();
+    if (s === 'newest') copy.sort((a, b) => b.createdAt - a.createdAt);
+    else if (s === 'oldest') copy.sort((a, b) => a.createdAt - b.createdAt);
+    else if (s === 'name') copy.sort((a, b) => a.name.localeCompare(b.name));
+    else if (s === 'size') copy.sort((a, b) => b.size - a.size);
+    return copy;
+  }
+
+  function renderList() {
+    const q = els.searchInput.value.trim().toLowerCase();
+    let items = allItems;
+    if (activeFilter !== 'all') items = items.filter(i => i.kind === activeFilter);
+    if (q) items = items.filter(i => i.name.toLowerCase().includes(q));
+    items = sortItems(items);
+
+    revokeAll();
+    els.grid.replaceChildren();
+
+    for (const rec of items) {
+      els.grid.appendChild(buildCard(rec));
+    }
+
+    const totalV = allItems.filter(i => i.kind === 'video').length;
+    const totalP = allItems.filter(i => i.kind === 'photo').length;
+    els.headerMeta.textContent = `${allItems.length} item${allItems.length === 1 ? '' : 's'} · ${totalV} video${totalV === 1 ? '' : 's'} · ${totalP} photo${totalP === 1 ? '' : 's'}`;
+    els.countLabel.textContent = `${items.length} shown`;
+    els.emptyState.style.display = items.length ? 'none' : '';
+    if (!items.length && !allItems.length) {
+      els.emptyState.textContent = 'No media stored yet.';
+    } else if (!items.length) {
+      els.emptyState.textContent = 'No items match the current filter or search.';
+    }
+  }
+
+  function buildCard(rec) {
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    const url = URL.createObjectURL(rec.blob);
+    objectUrls.add(url);
+
+    const thumbWrap = document.createElement('div');
+    thumbWrap.className = 'thumb-wrap';
+
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = rec.kind === 'video' ? 'VIDEO' : 'PHOTO';
+
+    const thumb = document.createElement('div');
+    thumb.className = 'thumb';
+
+    if (rec.kind === 'video') {
+      const v = document.createElement('video');
+      v.src = url;
+      v.controls = true;
+      v.preload = 'metadata';
+      thumb.appendChild(v);
+    } else {
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = rec.name;
+      img.loading = 'lazy';
+      thumb.appendChild(img);
+      thumb.addEventListener('click', () => openLightbox(rec, url));
+    }
+
+    thumbWrap.append(thumb, badge);
+
+    const info = document.createElement('div');
+    info.className = 'info';
+    const title = document.createElement('div');
+    title.className = 'title';
+    title.textContent = rec.name;
+    title.title = rec.name;
+    const sub = document.createElement('div');
+    sub.className = 'sub';
+    sub.textContent = `${fmtBytes(rec.size)} · ${fmtDate(rec.createdAt)}`;
+    info.append(title, sub);
+
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+
+    const dlBtn = document.createElement('button');
+    dlBtn.type = 'button';
+    dlBtn.textContent = 'Download';
+    dlBtn.addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = rec.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'danger';
+    delBtn.textContent = 'Delete';
+    delBtn.addEventListener('click', async () => {
+      delBtn.disabled = true;
+      try {
+        await deleteRecord(rec.store, rec.id);
+        await refresh();
+        setStatus(`Deleted "${rec.name}".`);
+      } catch (err) {
+        delBtn.disabled = false;
+        setStatus('Delete failed: ' + err.message, true);
+      }
+    });
+
+    actions.append(dlBtn, delBtn);
+    card.append(thumbWrap, info, actions);
+    return card;
+  }
+
+  // ---------- Lightbox ----------
+
+  function openLightbox(rec, url) {
+    els.lightboxContent.replaceChildren();
+    const img = document.createElement('img');
+    img.src = url;
+    img.alt = rec.name;
+    els.lightboxContent.appendChild(img);
+    els.lightboxCaption.textContent = `${rec.name} — ${fmtBytes(rec.size)} · ${fmtDate(rec.createdAt)}`;
+    els.lightbox.classList.add('open');
+    els.lightbox.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeLightbox() {
+    els.lightbox.classList.remove('open');
+    els.lightbox.setAttribute('aria-hidden', 'true');
+    els.lightboxContent.replaceChildren();
+    els.lightboxCaption.textContent = '';
+  }
+
+  // ---------- Events ----------
+
+  els.pickVideoBtn.addEventListener('click', () => els.videoInput.click());
+  els.pickPhotoBtn.addEventListener('click', () => els.photoInput.click());
+
+  els.videoInput.addEventListener('change', async () => {
+    if (els.videoInput.files && els.videoInput.files.length) {
+      await ingestFiles(els.videoInput.files);
+      els.videoInput.value = '';
+    }
+  });
+  els.photoInput.addEventListener('change', async () => {
+    if (els.photoInput.files && els.photoInput.files.length) {
+      await ingestFiles(els.photoInput.files);
+      els.photoInput.value = '';
+    }
+  });
+
+  ['dragenter', 'dragover'].forEach(ev => {
+    els.dropzone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      els.dropzone.classList.add('drag');
+    });
+  });
+  ['dragleave', 'drop'].forEach(ev => {
+    els.dropzone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (ev === 'dragleave' && e.target !== els.dropzone) return;
+      els.dropzone.classList.remove('drag');
+    });
+  });
+  els.dropzone.addEventListener('drop', async (e) => {
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+      await ingestFiles(e.dataTransfer.files);
+    }
+  });
+
+  els.tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      els.tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      activeFilter = tab.dataset.filter;
+      renderList();
+    });
+  });
+
+  els.searchInput.addEventListener('input', renderList);
+  els.sortSelect.addEventListener('change', () => {
+    activeSort = els.sortSelect.value;
+    renderList();
+  });
+
+  els.clearAllBtn.addEventListener('click', async () => {
+    if (!allItems.length) {
+      setStatus('Library is already empty.');
+      return;
+    }
+    const ok = window.confirm(`Delete all ${allItems.length} stored item(s)? This cannot be undone.`);
+    if (!ok) return;
+    els.clearAllBtn.disabled = true;
+    try {
+      await Promise.all([clearStore(STORE_VIDEO), clearStore(STORE_PHOTO)]);
+      await refresh();
+      setStatus('Library cleared.');
+    } catch (err) {
+      setStatus('Clear failed: ' + err.message, true);
+    } finally {
+      els.clearAllBtn.disabled = false;
+    }
+  });
+
+  els.lightboxClose.addEventListener('click', closeLightbox);
+  els.lightbox.addEventListener('click', (e) => {
+    if (e.target === els.lightbox) closeLightbox();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && els.lightbox.classList.contains('open')) closeLightbox();
+  });
+
+  window.addEventListener('beforeunload', revokeAll);
+
+  // ---------- Boot ----------
+
+  (async () => {
+    if (!('indexedDB' in window)) {
+      setStatus('This browser does not support IndexedDB. Storage will not persist.', true);
+      return;
+    }
+    try {
+      db = await openDb();
+    } catch (err) {
+      setStatus('Failed to open storage: ' + err.message, true);
+      return;
+    }
+    await refresh();
+    setStatus('Ready.');
+  })();
+})();
+</script>
+</body>
+</html>
