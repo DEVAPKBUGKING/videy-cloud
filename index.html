@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VidVault 2 — Local Media Library</title>
+<title>VidVault 3 — Local Vault</title>
 <style>
   :root {
     --bg: #0e0f12;
@@ -15,6 +15,8 @@
     --accent: #4f8cff;
     --danger: #e5484d;
     --photo-accent: #22c55e;
+    --note-accent: #f59e0b;
+    --file-accent: #a855f7;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
@@ -66,6 +68,8 @@
   button:hover { background: #232733; border-color: #333a47; }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   button.primary:hover { background: #3d7bf0; }
+  button.note { background: var(--note-accent); border-color: var(--note-accent); color: #1a1206; }
+  button.note:hover { background: #d98a09; }
   button.danger { color: var(--danger); border-color: #3a2022; }
   button.danger:hover { background: #2a1a1c; }
   button:disabled { opacity: .5; cursor: not-allowed; }
@@ -75,6 +79,7 @@
     gap: 4px;
     margin: 20px 0 14px;
     border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
   }
   .tab {
     background: transparent;
@@ -87,6 +92,16 @@
   }
   .tab:hover { background: var(--panel); color: var(--text); border-color: var(--line); }
   .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .tab .count {
+    display: inline-block;
+    background: var(--panel-2);
+    color: var(--muted);
+    border-radius: 8px;
+    padding: 0 6px;
+    font-size: 11px;
+    margin-left: 6px;
+    border: 1px solid var(--line);
+  }
 
   .toolbar {
     display: flex;
@@ -130,6 +145,7 @@
   .progress-item .bar { width: 160px; height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
   .progress-item .bar > i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .15s; }
   .progress-item.photo .bar > i { background: var(--photo-accent); }
+  .progress-item.file .bar > i { background: var(--file-accent); }
 
   .grid {
     display: grid;
@@ -168,6 +184,48 @@
     object-fit: contain;
     background: #000;
   }
+  .card .thumb .file-glyph {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 0.4px;
+    text-align: center;
+    padding: 8px;
+    width: 100%;
+    height: 100%;
+  }
+  .card .thumb .file-glyph .ext {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--file-accent);
+    letter-spacing: 1px;
+  }
+  .card .thumb .note-preview {
+    padding: 12px;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: linear-gradient(180deg, #1b1710 0%, #14110c 100%);
+    border-left: 3px solid var(--note-accent);
+  }
+  .card .thumb .note-preview .ntitle {
+    color: var(--text);
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .card .info { padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
   .card .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .card .sub { color: var(--muted); font-size: 12px; }
@@ -185,6 +243,9 @@
     border-radius: 4px;
     letter-spacing: 0.3px;
   }
+  .badge.photo { background: rgba(34,197,94,.85); color: #06210f; }
+  .badge.note  { background: rgba(245,158,11,.9); color: #1a1206; }
+  .badge.file  { background: rgba(168,85,247,.9); color: #fff; }
   .thumb-wrap { position: relative; }
 
   .empty {
@@ -198,8 +259,8 @@
   .status { color: var(--muted); font-size: 12px; margin-top: 8px; min-height: 1.2em; }
   .status.err { color: var(--danger); }
 
-  /* Lightbox */
-  .lightbox {
+  /* Lightbox / modal shared */
+  .overlay {
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,.92);
@@ -209,21 +270,8 @@
     z-index: 100;
     padding: 20px;
   }
-  .lightbox.open { display: flex; }
-  .lightbox img {
-    max-width: 95vw;
-    max-height: 92vh;
-    object-fit: contain;
-    display: block;
-    border-radius: 4px;
-  }
-  .lightbox video {
-    max-width: 95vw;
-    max-height: 92vh;
-    background: #000;
-    border-radius: 4px;
-  }
-  .lightbox .close {
+  .overlay.open { display: flex; }
+  .overlay .close {
     position: absolute;
     top: 16px;
     right: 20px;
@@ -237,8 +285,8 @@
     line-height: 1;
     cursor: pointer;
   }
-  .lightbox .close:hover { background: var(--panel-2); }
-  .lightbox .caption {
+  .overlay .close:hover { background: var(--panel-2); }
+  .overlay .caption {
     position: absolute;
     bottom: 16px;
     left: 20px;
@@ -250,38 +298,105 @@
     overflow: hidden;
     white-space: nowrap;
   }
+  .lightbox-media img,
+  .lightbox-media video {
+    max-width: 95vw;
+    max-height: 92vh;
+    object-fit: contain;
+    display: block;
+    border-radius: 4px;
+    background: #000;
+  }
+
+  /* Note editor modal */
+  .note-editor {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    width: min(720px, 92vw);
+    height: min(80vh, 720px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .note-editor .head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .note-editor .head input {
+    flex: 1;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .note-editor .head input:focus { outline: none; border-color: var(--accent); }
+  .note-editor .head .saveState { color: var(--muted); font-size: 12px; min-width: 80px; text-align: right; }
+  .note-editor textarea {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    padding: 16px;
+    font: 14px/1.6 ui-monospace, "SF Mono", Consolas, monospace;
+    resize: none;
+    outline: none;
+  }
+  .note-editor .foot {
+    padding: 10px 16px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .note-editor .foot .right { display: flex; gap: 8px; }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>VidVault 2</h1>
+  <h1>VidVault 3</h1>
   <span class="meta" id="headerMeta">0 items</span>
 </header>
 
 <main>
   <div class="dropzone" id="dropzone">
-    <div><strong>Drop videos and photos here</strong> or pick files. Everything stays on this device — stored in IndexedDB.</div>
+    <div><strong>Drop any file here</strong> or use the buttons. Everything stays on this device — stored in IndexedDB. Video, photo, and other files classify themselves; write notes with the Notes button.</div>
     <div class="btn-row">
       <button class="primary" id="pickVideoBtn" type="button">Add videos</button>
       <button class="primary" id="pickPhotoBtn" type="button" style="background:var(--photo-accent);border-color:var(--photo-accent)">Add photos</button>
+      <button id="pickFileBtn" type="button" style="background:var(--file-accent);border-color:var(--file-accent);color:#fff">Add files</button>
+      <button class="note" id="newNoteBtn" type="button">New note</button>
       <button id="clearAllBtn" type="button" class="danger">Clear library</button>
     </div>
     <input type="file" id="videoInput" accept="video/*" multiple hidden>
     <input type="file" id="photoInput" accept="image/*" multiple hidden>
+    <input type="file" id="fileInput" multiple hidden>
     <div class="status" id="status"></div>
   </div>
 
   <div class="progress-list" id="progressList"></div>
 
   <div class="tabs" role="tablist">
-    <button class="tab active" data-filter="all" type="button">All</button>
-    <button class="tab" data-filter="video" type="button">Videos</button>
-    <button class="tab" data-filter="photo" type="button">Photos</button>
+    <button class="tab active" data-filter="all" type="button">All <span class="count" id="countAll">0</span></button>
+    <button class="tab" data-filter="video" type="button">Videos <span class="count" id="countVideo">0</span></button>
+    <button class="tab" data-filter="photo" type="button">Photos <span class="count" id="countPhoto">0</span></button>
+    <button class="tab" data-filter="note" type="button">Notes <span class="count" id="countNote">0</span></button>
+    <button class="tab" data-filter="file" type="button">Files <span class="count" id="countFile">0</span></button>
   </div>
 
   <div class="toolbar">
-    <input type="search" id="searchInput" placeholder="Search by name…">
+    <input type="search" id="searchInput" placeholder="Search by name or note text…">
     <select id="sortSelect">
       <option value="newest">Newest first</option>
       <option value="oldest">Oldest first</option>
@@ -292,31 +407,57 @@
   </div>
 
   <div class="grid" id="grid"></div>
-  <div class="empty" id="emptyState">No media stored yet.</div>
+  <div class="empty" id="emptyState">No items stored yet.</div>
 </main>
 
-<div class="lightbox" id="lightbox" aria-hidden="true">
+<!-- Media lightbox -->
+<div class="overlay" id="lightbox" aria-hidden="true">
   <button class="close" id="lightboxClose" type="button" aria-label="Close">×</button>
-  <div id="lightboxContent"></div>
+  <div class="lightbox-media" id="lightboxContent"></div>
   <div class="caption" id="lightboxCaption"></div>
+</div>
+
+<!-- Note editor -->
+<div class="overlay" id="noteModal" aria-hidden="true">
+  <div class="note-editor">
+    <div class="head">
+      <input type="text" id="noteTitle" placeholder="Untitled note" maxlength="200">
+      <span class="saveState" id="noteSaveState"></span>
+    </div>
+    <textarea id="noteBody" placeholder="Start typing…"></textarea>
+    <div class="foot">
+      <span id="noteMeta"></span>
+      <div class="right">
+        <button type="button" id="noteDeleteBtn" class="danger">Delete</button>
+        <button type="button" id="noteCloseBtn">Close</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
 (() => {
   'use strict';
 
-  const DB_NAME = 'vidvault2';
+  const DB_NAME = 'vidvault3';
   const DB_VERSION = 1;
-  const STORE_VIDEO = 'videos';
-  const STORE_PHOTO = 'photos';
+  const STORES = {
+    video: 'videos',
+    photo: 'photos',
+    note:  'notes',
+    file:  'files',
+  };
 
   const els = {
     dropzone: document.getElementById('dropzone'),
     pickVideoBtn: document.getElementById('pickVideoBtn'),
     pickPhotoBtn: document.getElementById('pickPhotoBtn'),
+    pickFileBtn: document.getElementById('pickFileBtn'),
+    newNoteBtn: document.getElementById('newNoteBtn'),
     clearAllBtn: document.getElementById('clearAllBtn'),
     videoInput: document.getElementById('videoInput'),
     photoInput: document.getElementById('photoInput'),
+    fileInput: document.getElementById('fileInput'),
     status: document.getElementById('status'),
     progressList: document.getElementById('progressList'),
     searchInput: document.getElementById('searchInput'),
@@ -326,10 +467,22 @@
     emptyState: document.getElementById('emptyState'),
     headerMeta: document.getElementById('headerMeta'),
     tabs: Array.from(document.querySelectorAll('.tab')),
+    countAll: document.getElementById('countAll'),
+    countVideo: document.getElementById('countVideo'),
+    countPhoto: document.getElementById('countPhoto'),
+    countNote: document.getElementById('countNote'),
+    countFile: document.getElementById('countFile'),
     lightbox: document.getElementById('lightbox'),
     lightboxContent: document.getElementById('lightboxContent'),
     lightboxCaption: document.getElementById('lightboxCaption'),
     lightboxClose: document.getElementById('lightboxClose'),
+    noteModal: document.getElementById('noteModal'),
+    noteTitle: document.getElementById('noteTitle'),
+    noteBody: document.getElementById('noteBody'),
+    noteSaveState: document.getElementById('noteSaveState'),
+    noteMeta: document.getElementById('noteMeta'),
+    noteDeleteBtn: document.getElementById('noteDeleteBtn'),
+    noteCloseBtn: document.getElementById('noteCloseBtn'),
   };
 
   let db = null;
@@ -337,6 +490,11 @@
   let allItems = [];
   let activeFilter = 'all';
   let activeSort = 'newest';
+
+  // Note editor state
+  let noteCurrent = null;       // { id, createdAt } or null for new
+  let noteDirty = false;
+  let noteSaveTimer = null;
 
   const VIDEO_EXT = /\.(mp4|webm|ogg|ogv|mov|mkv|m4v|avi|3gp)$/i;
   const PHOTO_EXT = /\.(jpg|jpeg|png|gif|webp|avif|bmp|svg|heic|heif)$/i;
@@ -348,15 +506,12 @@
       const req = indexedDB.open(DB_NAME, DB_VERSION);
       req.onupgradeneeded = () => {
         const d = req.result;
-        if (!d.objectStoreNames.contains(STORE_VIDEO)) {
-          const s = d.createObjectStore(STORE_VIDEO, { keyPath: 'id', autoIncrement: true });
-          s.createIndex('createdAt', 'createdAt');
-          s.createIndex('name', 'name');
-        }
-        if (!d.objectStoreNames.contains(STORE_PHOTO)) {
-          const s = d.createObjectStore(STORE_PHOTO, { keyPath: 'id', autoIncrement: true });
-          s.createIndex('createdAt', 'createdAt');
-          s.createIndex('name', 'name');
+        for (const storeName of Object.values(STORES)) {
+          if (!d.objectStoreNames.contains(storeName)) {
+            const s = d.createObjectStore(storeName, { keyPath: 'id', autoIncrement: true });
+            s.createIndex('createdAt', 'createdAt');
+            s.createIndex('name', 'name');
+          }
         }
       };
       req.onsuccess = () => resolve(req.result);
@@ -373,6 +528,22 @@
   function addRecord(storeName, record) {
     return new Promise((resolve, reject) => {
       const req = tx(storeName, 'readwrite').add(record);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function putRecord(storeName, record) {
+    return new Promise((resolve, reject) => {
+      const req = tx(storeName, 'readwrite').put(record);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function getRecord(storeName, id) {
+    return new Promise((resolve, reject) => {
+      const req = tx(storeName, 'readonly').get(id);
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
@@ -412,9 +583,7 @@
     return v.toFixed(v >= 10 || i === 0 ? 0 : 1) + ' ' + units[i];
   }
 
-  function fmtDate(ts) {
-    return new Date(ts).toLocaleString();
-  }
+  function fmtDate(ts) { return new Date(ts).toLocaleString(); }
 
   function setStatus(msg, isErr = false) {
     els.status.textContent = msg;
@@ -432,35 +601,34 @@
     if (t.startsWith('image/')) return 'photo';
     if (VIDEO_EXT.test(file.name)) return 'video';
     if (PHOTO_EXT.test(file.name)) return 'photo';
-    return null;
+    return 'file';
   }
 
-  // ---------- Ingest ----------
+  function extOf(name) {
+    const i = name.lastIndexOf('.');
+    return i >= 0 ? name.slice(i + 1).toUpperCase() : 'FILE';
+  }
+
+  // ---------- Ingest files ----------
 
   async function ingestFiles(fileList) {
     const files = Array.from(fileList);
-    const buckets = { video: [], photo: [], skipped: [] };
-    for (const f of files) {
-      const kind = classify(f);
-      if (kind === 'video') buckets.video.push(f);
-      else if (kind === 'photo') buckets.photo.push(f);
-      else buckets.skipped.push(f.name);
-    }
-    if (!buckets.video.length && !buckets.photo.length) {
-      setStatus('No video or photo files recognized in that selection.', true);
-      return;
-    }
+    if (!files.length) return;
 
     let ok = 0, fail = 0;
-
-    for (const f of buckets.video) {
-      const item = createProgressItem(f.name, 'video');
+    for (const f of files) {
+      const kind = classify(f);
+      const item = createProgressItem(f.name, kind);
       try {
         const blob = await readWithProgress(f, item.bar);
-        await addRecord(STORE_VIDEO, {
-          name: f.name, type: f.type || 'video/mp4',
-          size: f.size, blob, createdAt: Date.now(),
-        });
+        const record = {
+          name: f.name,
+          type: f.type || 'application/octet-stream',
+          size: f.size,
+          blob,
+          createdAt: Date.now(),
+        };
+        await addRecord(STORES[kind], record);
         ok++;
         item.el.remove();
       } catch (err) {
@@ -468,35 +636,13 @@
         markProgressFailed(item, f.name, err);
       }
     }
-    for (const f of buckets.photo) {
-      const item = createProgressItem(f.name, 'photo');
-      try {
-        const blob = await readWithProgress(f, item.bar);
-        await addRecord(STORE_PHOTO, {
-          name: f.name, type: f.type || 'image/jpeg',
-          size: f.size, blob, createdAt: Date.now(),
-        });
-        ok++;
-        item.el.remove();
-      } catch (err) {
-        fail++;
-        markProgressFailed(item, f.name, err);
-      }
-    }
-
-    const skippedNote = buckets.skipped.length
-      ? ` · skipped ${buckets.skipped.length} unrecognized`
-      : '';
-    setStatus(
-      `Imported ${ok} item${ok === 1 ? '' : 's'}${fail ? `, ${fail} failed` : ''}${skippedNote}.`,
-      fail > 0 && ok === 0
-    );
+    setStatus(`Imported ${ok} file${ok === 1 ? '' : 's'}${fail ? `, ${fail} failed` : ''}.`, fail > 0 && ok === 0);
     await refresh();
   }
 
   function createProgressItem(name, kind) {
     const el = document.createElement('div');
-    el.className = 'progress-item' + (kind === 'photo' ? ' photo' : '');
+    el.className = 'progress-item' + (kind === 'photo' ? ' photo' : kind === 'file' ? ' file' : '');
     el.innerHTML = `<span class="name"></span><div class="bar"><i></i></div><span class="sub"></span>`;
     el.querySelector('.name').textContent = name;
     const bar = el.querySelector('.bar > i');
@@ -537,17 +683,21 @@
     });
   }
 
-  // ---------- Render ----------
+  // ---------- Refresh + render ----------
 
   async function refresh() {
     try {
-      const [vids, pics] = await Promise.all([
-        getAllFrom(STORE_VIDEO),
-        getAllFrom(STORE_PHOTO),
+      const [v, p, n, f] = await Promise.all([
+        getAllFrom(STORES.video),
+        getAllFrom(STORES.photo),
+        getAllFrom(STORES.note),
+        getAllFrom(STORES.file),
       ]);
       allItems = [
-        ...vids.map(v => ({ ...v, kind: 'video', store: STORE_VIDEO })),
-        ...pics.map(p => ({ ...p, kind: 'photo', store: STORE_PHOTO })),
+        ...v.map(x => ({ ...x, kind: 'video', store: STORES.video })),
+        ...p.map(x => ({ ...x, kind: 'photo', store: STORES.photo })),
+        ...n.map(x => ({ ...x, kind: 'note',  store: STORES.note })),
+        ...f.map(x => ({ ...x, kind: 'file',  store: STORES.file })),
       ];
     } catch (err) {
       setStatus('Could not load library: ' + err.message, true);
@@ -561,32 +711,53 @@
     const copy = items.slice();
     if (s === 'newest') copy.sort((a, b) => b.createdAt - a.createdAt);
     else if (s === 'oldest') copy.sort((a, b) => a.createdAt - b.createdAt);
-    else if (s === 'name') copy.sort((a, b) => a.name.localeCompare(b.name));
-    else if (s === 'size') copy.sort((a, b) => b.size - a.size);
+    else if (s === 'name') copy.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    else if (s === 'size') copy.sort((a, b) => (b.size || 0) - (a.size || 0));
     return copy;
+  }
+
+  function matchesSearch(item, q) {
+    if (!q) return true;
+    if ((item.name || '').toLowerCase().includes(q)) return true;
+    if (item.kind === 'note') {
+      if ((item.title || '').toLowerCase().includes(q)) return true;
+      if ((item.body || '').toLowerCase().includes(q)) return true;
+    }
+    return false;
   }
 
   function renderList() {
     const q = els.searchInput.value.trim().toLowerCase();
     let items = allItems;
     if (activeFilter !== 'all') items = items.filter(i => i.kind === activeFilter);
-    if (q) items = items.filter(i => i.name.toLowerCase().includes(q));
+    if (q) items = items.filter(i => matchesSearch(i, q));
     items = sortItems(items);
 
     revokeAll();
     els.grid.replaceChildren();
 
-    for (const rec of items) {
-      els.grid.appendChild(buildCard(rec));
-    }
+    for (const rec of items) els.grid.appendChild(buildCard(rec));
 
-    const totalV = allItems.filter(i => i.kind === 'video').length;
-    const totalP = allItems.filter(i => i.kind === 'photo').length;
-    els.headerMeta.textContent = `${allItems.length} item${allItems.length === 1 ? '' : 's'} · ${totalV} video${totalV === 1 ? '' : 's'} · ${totalP} photo${totalP === 1 ? '' : 's'}`;
+    // Counts
+    const totals = { all: allItems.length, video: 0, photo: 0, note: 0, file: 0 };
+    for (const i of allItems) totals[i.kind]++;
+    els.countAll.textContent = totals.all;
+    els.countVideo.textContent = totals.video;
+    els.countPhoto.textContent = totals.photo;
+    els.countNote.textContent = totals.note;
+    els.countFile.textContent = totals.file;
+
+    els.headerMeta.textContent =
+      `${totals.all} item${totals.all === 1 ? '' : 's'} · ` +
+      `${totals.video} video${totals.video === 1 ? '' : 's'} · ` +
+      `${totals.photo} photo${totals.photo === 1 ? '' : 's'} · ` +
+      `${totals.note} note${totals.note === 1 ? '' : 's'} · ` +
+      `${totals.file} file${totals.file === 1 ? '' : 's'}`;
+
     els.countLabel.textContent = `${items.length} shown`;
     els.emptyState.style.display = items.length ? 'none' : '';
     if (!items.length && !allItems.length) {
-      els.emptyState.textContent = 'No media stored yet.';
+      els.emptyState.textContent = 'No items stored yet.';
     } else if (!items.length) {
       els.emptyState.textContent = 'No items match the current filter or search.';
     }
@@ -596,18 +767,21 @@
     const card = document.createElement('div');
     card.className = 'card';
 
-    const url = URL.createObjectURL(rec.blob);
-    objectUrls.add(url);
-
     const thumbWrap = document.createElement('div');
     thumbWrap.className = 'thumb-wrap';
 
     const badge = document.createElement('span');
-    badge.className = 'badge';
-    badge.textContent = rec.kind === 'video' ? 'VIDEO' : 'PHOTO';
+    badge.className = 'badge' + (rec.kind === 'video' ? '' : ' ' + rec.kind);
+    badge.textContent = rec.kind === 'note' ? 'NOTE' : rec.kind === 'file' ? 'FILE' : rec.kind === 'photo' ? 'PHOTO' : 'VIDEO';
 
     const thumb = document.createElement('div');
     thumb.className = 'thumb';
+
+    let url = null;
+    if (rec.kind === 'video' || rec.kind === 'photo') {
+      url = URL.createObjectURL(rec.blob);
+      objectUrls.add(url);
+    }
 
     if (rec.kind === 'video') {
       const v = document.createElement('video');
@@ -615,13 +789,34 @@
       v.controls = true;
       v.preload = 'metadata';
       thumb.appendChild(v);
-    } else {
+    } else if (rec.kind === 'photo') {
       const img = document.createElement('img');
       img.src = url;
       img.alt = rec.name;
       img.loading = 'lazy';
       thumb.appendChild(img);
       thumb.addEventListener('click', () => openLightbox(rec, url));
+    } else if (rec.kind === 'note') {
+      const wrap = document.createElement('div');
+      wrap.className = 'note-preview';
+      const t = document.createElement('div');
+      t.className = 'ntitle';
+      t.textContent = rec.title || 'Untitled note';
+      const b = document.createElement('div');
+      b.textContent = (rec.body || '').slice(0, 260) || '(empty)';
+      wrap.append(t, b);
+      thumb.appendChild(wrap);
+      thumb.addEventListener('click', () => openNoteEditor(rec));
+    } else {
+      const g = document.createElement('div');
+      g.className = 'file-glyph';
+      const ext = document.createElement('div');
+      ext.className = 'ext';
+      ext.textContent = extOf(rec.name || '');
+      const label = document.createElement('div');
+      label.textContent = rec.type || 'application/octet-stream';
+      g.append(ext, label);
+      thumb.appendChild(g);
     }
 
     thumbWrap.append(thumb, badge);
@@ -630,45 +825,92 @@
     info.className = 'info';
     const title = document.createElement('div');
     title.className = 'title';
-    title.textContent = rec.name;
-    title.title = rec.name;
+    title.title = rec.kind === 'note' ? (rec.title || 'Untitled note') : rec.name;
+    title.textContent = rec.kind === 'note' ? (rec.title || 'Untitled note') : rec.name;
     const sub = document.createElement('div');
     sub.className = 'sub';
-    sub.textContent = `${fmtBytes(rec.size)} · ${fmtDate(rec.createdAt)}`;
+    if (rec.kind === 'note') {
+      const words = (rec.body || '').trim() ? (rec.body || '').trim().split(/\s+/).length : 0;
+      sub.textContent = `${words} word${words === 1 ? '' : 's'} · ${fmtDate(rec.updatedAt || rec.createdAt)}`;
+    } else {
+      sub.textContent = `${fmtBytes(rec.size)} · ${fmtDate(rec.createdAt)}`;
+    }
     info.append(title, sub);
 
     const actions = document.createElement('div');
     actions.className = 'actions';
 
-    const dlBtn = document.createElement('button');
-    dlBtn.type = 'button';
-    dlBtn.textContent = 'Download';
-    dlBtn.addEventListener('click', () => {
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = rec.name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    });
+    if (rec.kind === 'note') {
+      const openBtn = document.createElement('button');
+      openBtn.type = 'button';
+      openBtn.textContent = 'Open';
+      openBtn.addEventListener('click', () => openNoteEditor(rec));
 
-    const delBtn = document.createElement('button');
-    delBtn.type = 'button';
-    delBtn.className = 'danger';
-    delBtn.textContent = 'Delete';
-    delBtn.addEventListener('click', async () => {
-      delBtn.disabled = true;
-      try {
-        await deleteRecord(rec.store, rec.id);
-        await refresh();
-        setStatus(`Deleted "${rec.name}".`);
-      } catch (err) {
-        delBtn.disabled = false;
-        setStatus('Delete failed: ' + err.message, true);
-      }
-    });
+      const copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.textContent = 'Copy';
+      copyBtn.addEventListener('click', async () => {
+        const text = (rec.title ? rec.title + '\n\n' : '') + (rec.body || '');
+        try {
+          await navigator.clipboard.writeText(text);
+          setStatus(`Copied note "${rec.title || 'Untitled'}" to clipboard.`);
+        } catch (err) {
+          setStatus('Clipboard copy failed: ' + err.message, true);
+        }
+      });
 
-    actions.append(dlBtn, delBtn);
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'danger';
+      delBtn.textContent = 'Delete';
+      delBtn.addEventListener('click', async () => {
+        if (!window.confirm(`Delete note "${rec.title || 'Untitled'}"?`)) return;
+        delBtn.disabled = true;
+        try {
+          await deleteRecord(rec.store, rec.id);
+          await refresh();
+          setStatus('Note deleted.');
+        } catch (err) {
+          delBtn.disabled = false;
+          setStatus('Delete failed: ' + err.message, true);
+        }
+      });
+
+      actions.append(openBtn, copyBtn, delBtn);
+    } else {
+      const dlBtn = document.createElement('button');
+      dlBtn.type = 'button';
+      dlBtn.textContent = 'Download';
+      dlBtn.addEventListener('click', () => {
+        const u = url || URL.createObjectURL(rec.blob);
+        if (!url) objectUrls.add(u);
+        const a = document.createElement('a');
+        a.href = u;
+        a.download = rec.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      });
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'danger';
+      delBtn.textContent = 'Delete';
+      delBtn.addEventListener('click', async () => {
+        delBtn.disabled = true;
+        try {
+          await deleteRecord(rec.store, rec.id);
+          await refresh();
+          setStatus(`Deleted "${rec.name}".`);
+        } catch (err) {
+          delBtn.disabled = false;
+          setStatus('Delete failed: ' + err.message, true);
+        }
+      });
+
+      actions.append(dlBtn, delBtn);
+    }
+
     card.append(thumbWrap, info, actions);
     return card;
   }
@@ -693,23 +935,134 @@
     els.lightboxCaption.textContent = '';
   }
 
+  // ---------- Note editor ----------
+
+  function openNoteEditor(rec) {
+    if (rec && rec.id != null) {
+      noteCurrent = { id: rec.id, createdAt: rec.createdAt };
+      els.noteTitle.value = rec.title || '';
+      els.noteBody.value = rec.body || '';
+      els.noteMeta.textContent = `Created ${fmtDate(rec.createdAt)}${rec.updatedAt ? ' · edited ' + fmtDate(rec.updatedAt) : ''}`;
+    } else {
+      noteCurrent = null;
+      els.noteTitle.value = '';
+      els.noteBody.value = '';
+      els.noteMeta.textContent = 'New note';
+    }
+    noteDirty = false;
+    els.noteSaveState.textContent = '';
+    els.noteModal.classList.add('open');
+    els.noteModal.setAttribute('aria-hidden', 'false');
+    setTimeout(() => els.noteTitle.focus(), 0);
+  }
+
+  async function saveNoteNow() {
+    clearTimeout(noteSaveTimer);
+    const title = els.noteTitle.value.trim();
+    const body = els.noteBody.value;
+    if (!title && !body.trim() && !noteCurrent) {
+      els.noteSaveState.textContent = '';
+      return;
+    }
+    const now = Date.now();
+    if (noteCurrent && noteCurrent.id != null) {
+      const existing = await getRecord(STORES.note, noteCurrent.id);
+      const rec = {
+        ...(existing || {}),
+        id: noteCurrent.id,
+        createdAt: existing ? existing.createdAt : (noteCurrent.createdAt || now),
+        updatedAt: now,
+        title,
+        body,
+        size: new Blob([body]).size,
+        name: title || 'Untitled note',
+      };
+      await putRecord(STORES.note, rec);
+    } else {
+      const rec = {
+        createdAt: now,
+        updatedAt: now,
+        title,
+        body,
+        size: new Blob([body]).size,
+        name: title || 'Untitled note',
+      };
+      const id = await addRecord(STORES.note, rec);
+      noteCurrent = { id, createdAt: now };
+    }
+    noteDirty = false;
+    els.noteSaveState.textContent = 'Saved';
+    setTimeout(() => {
+      if (!noteDirty) els.noteSaveState.textContent = '';
+    }, 1200);
+    await refresh();
+  }
+
+  function scheduleNoteSave() {
+    noteDirty = true;
+    els.noteSaveState.textContent = 'Saving…';
+    clearTimeout(noteSaveTimer);
+    noteSaveTimer = setTimeout(() => {
+      saveNoteNow().catch(err => {
+        els.noteSaveState.textContent = 'Save failed';
+        setStatus('Note save failed: ' + err.message, true);
+      });
+    }, 600);
+  }
+
+  async function closeNoteEditor() {
+    if (noteDirty) {
+      try { await saveNoteNow(); } catch (err) {
+        setStatus('Note save failed: ' + err.message, true);
+      }
+    }
+    els.noteModal.classList.remove('open');
+    els.noteModal.setAttribute('aria-hidden', 'true');
+    noteCurrent = null;
+    noteDirty = false;
+    els.noteSaveState.textContent = '';
+  }
+
+  async function deleteCurrentNote() {
+    if (!noteCurrent || noteCurrent.id == null) {
+      els.noteTitle.value = '';
+      els.noteBody.value = '';
+      noteCurrent = null;
+      noteDirty = false;
+      await closeNoteEditor();
+      return;
+    }
+    if (!window.confirm('Delete this note?')) return;
+    try {
+      await deleteRecord(STORES.note, noteCurrent.id);
+      noteCurrent = null;
+      noteDirty = false;
+      els.noteTitle.value = '';
+      els.noteBody.value = '';
+      els.noteModal.classList.remove('open');
+      els.noteModal.setAttribute('aria-hidden', 'true');
+      await refresh();
+      setStatus('Note deleted.');
+    } catch (err) {
+      setStatus('Delete failed: ' + err.message, true);
+    }
+  }
+
   // ---------- Events ----------
 
   els.pickVideoBtn.addEventListener('click', () => els.videoInput.click());
   els.pickPhotoBtn.addEventListener('click', () => els.photoInput.click());
+  els.pickFileBtn.addEventListener('click', () => els.fileInput.click());
+  els.newNoteBtn.addEventListener('click', () => openNoteEditor(null));
 
-  els.videoInput.addEventListener('change', async () => {
-    if (els.videoInput.files && els.videoInput.files.length) {
-      await ingestFiles(els.videoInput.files);
-      els.videoInput.value = '';
-    }
-  });
-  els.photoInput.addEventListener('change', async () => {
-    if (els.photoInput.files && els.photoInput.files.length) {
-      await ingestFiles(els.photoInput.files);
-      els.photoInput.value = '';
-    }
-  });
+  for (const [inputEl, key] of [[els.videoInput, 'video'], [els.photoInput, 'photo'], [els.fileInput, 'file']]) {
+    inputEl.addEventListener('change', async () => {
+      if (inputEl.files && inputEl.files.length) {
+        await ingestFiles(inputEl.files);
+        inputEl.value = '';
+      }
+    });
+  }
 
   ['dragenter', 'dragover'].forEach(ev => {
     els.dropzone.addEventListener(ev, (e) => {
@@ -756,7 +1109,7 @@
     if (!ok) return;
     els.clearAllBtn.disabled = true;
     try {
-      await Promise.all([clearStore(STORE_VIDEO), clearStore(STORE_PHOTO)]);
+      await Promise.all(Object.values(STORES).map(clearStore));
       await refresh();
       setStatus('Library cleared.');
     } catch (err) {
@@ -770,8 +1123,21 @@
   els.lightbox.addEventListener('click', (e) => {
     if (e.target === els.lightbox) closeLightbox();
   });
+
+  els.noteTitle.addEventListener('input', scheduleNoteSave);
+  els.noteBody.addEventListener('input', scheduleNoteSave);
+  els.noteCloseBtn.addEventListener('click', () => { closeNoteEditor(); });
+  els.noteDeleteBtn.addEventListener('click', deleteCurrentNote);
+
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && els.lightbox.classList.contains('open')) closeLightbox();
+    if (e.key === 'Escape') {
+      if (els.lightbox.classList.contains('open')) closeLightbox();
+      else if (els.noteModal.classList.contains('open')) closeNoteEditor();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 's' && els.noteModal.classList.contains('open')) {
+      e.preventDefault();
+      saveNoteNow();
+    }
   });
 
   window.addEventListener('beforeunload', revokeAll);
